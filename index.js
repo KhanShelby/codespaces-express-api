@@ -1,45 +1,121 @@
-const express = require('express')
-const bodyParser = require('body-parser')
-const app = express()
-const port = 5000
-app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({extended:false}))
- 
-app.use((req,res,next)=>{
-  res.setHeader("Access-Control-Allow-Origin","*");
+const express = require('express');
+const bodyParser = require('body-parser');
+var mysql = require('mysql');
+
+const app = express();
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+
+// CORS middleware
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
   );
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, DELETE",
-  );
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
   next();
 });
-app.use(express.json())
- 
-const products=[
-  {id:0,name:"Notebook Acer Swift",price:45900,img:"https://img.advice.co.th/images_nas/pic_product4/A0147295/A0147295_s.jpg"},
-  {id:1,name:"Notebook Asus Vivo",price:19900,img:"https://img.advice.co.th/images_nas/pic_product4/A0146010/A0146010_s.jpg"},
-  {id:2,name:"Notebook Lenovo Ideapad",price:32900,img:"https://img.advice.co.th/images_nas/pic_product4/A0149009/A0149009_s.jpg"},
-  {id:3,name:"Notebook MSI Prestige",price:54900,img:"https://img.advice.co.th/images_nas/pic_product4/A0149954/A0149954_s.jpg"},
-  {id:4,name:"Notebook DELL XPS",price:99900,img:"https://img.advice.co.th/images_nas/pic_product4/A0146335/A0146335_s.jpg"},
-  {id:5,name:"Notebook HP Envy",price:46900,img:"https://img.advice.co.th/images_nas/pic_product4/A0145712/A0145712_s.jpg"}];
- 
-app.get('/', (req, res) => {
-  res.send('Hello World!')
-})
- 
-app.get('/api/products',(req,res)=>{
-  if(products.length>0)
-    res.send(products);
-  else
-    res.status(400).send("No products founds");
-})
- 
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
-})
- 
- 
+
+app.use(express.json());
+
+var con = mysql.createConnection({
+  host: 'korawit.ddns.net',
+  user: 'webapp',
+  password: 'secret2024',
+  port: '3307',
+  database: 'shop'
+});
+
+// Handle MySQL connection errors
+con.connect(function (err) {
+  if (err) {
+    console.error('Error connecting to MySQL: ', err);
+    return;
+  }
+  console.log('Connected to MySQL');
+});
+
+app.get('/api/products', function (req, res) {
+  con.query('SELECT * FROM products', function (err, result, fields) {
+    if (err) {
+      console.error('Database error:', err);  // Log detailed error
+      return res.status(500).send('Error fetching products');
+    }
+    console.log(result);
+    res.send(result);
+  });
+});
+
+
+// GET product by ID
+app.get('/api/products/:id', function (req, res) {
+  const id = req.params.id;
+
+  con.query('SELECT * FROM products WHERE id = ?', [id], function (err, result, fields) {
+    if (err) {
+      console.error('Database error:', err);  // Log detailed error
+      return res.status(500).send('Error fetching product');
+    }
+
+    if (result.length > 0) {
+      res.send(result);
+    } else {
+      res.status(404).send('Product not found for ID ' + id);
+    }
+  });
+});
+
+
+// DELETE product by ID
+app.delete('/api/products/:id', function (req, res) {
+  const id = req.params.id;
+
+  con.query('DELETE FROM products WHERE id = ?', [id], function (err, result, fields) {
+    if (err) {
+      console.error('Database error:', err);  // Log detailed error
+      return res.status(500).send('Error deleting product');
+    }
+
+    // Fetch updated list of products after deletion
+    con.query('SELECT * FROM products', function (err, result, fields) {
+      if (err) {
+        console.error('Database error:', err);  // Log detailed error
+        return res.status(500).send('Error fetching products after deletion');
+      }
+      res.send(result);
+    });
+  });
+});
+
+
+// PUT update product by ID
+app.put('/api/products/:id', function (req, res) {
+  const id = req.params.id;
+  const name = req.body.name;
+  const price = req.body.price;
+
+  const sql = 'UPDATE products SET name = ?, price = ? WHERE id = ?';
+
+  con.query(sql, [name, price, id], function (err, result) {
+    if (err) {
+      console.error('Database error:', err);  // Log detailed error
+      return res.status(400).send('Error updating product');
+    }
+
+    // Fetch updated list of products after update
+    con.query('SELECT * FROM products', function (err, result, fields) {
+      if (err) {
+        console.error('Database error:', err);  // Log detailed error
+        return res.status(500).send('Error fetching products after update');
+      }
+      res.send(result);
+    });
+  });
+});
+
+//Start Server
+const port = process.env.PORT || 3001;
+app.listen(port, function () {
+  console.log('Listening on port', port);
+});
